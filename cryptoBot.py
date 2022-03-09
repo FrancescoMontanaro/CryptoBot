@@ -309,7 +309,7 @@ class CryptoBot:
 
     ### PUBLIC METHODS ###
     
-    # Function to start the bot execution
+    # Function to start the CryptoBot's execution
     def start(self) -> None:
         # Creating the objects threads
         data_collector_thread = threading.Thread(target=self.data_collector.start, args=[])

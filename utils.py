@@ -1,12 +1,23 @@
+import os
 import pytz
+import dotenv
 import logging
 import datetime as dt
 from discordwebhook import Discord
 
-# Global variables
+
+# Loading the environmental variables
+dotenv.load_dotenv()
+
+# Instantiating the Discord object
+webhook_url = os.getenv('DISCORD_WEBHOOK_URL')
+discord = Discord(url=webhook_url)
+
+# Logs file initialization
 logFile = "logs.log"
 logging.basicConfig(filename=logFile, level=logging.ERROR)
-discord = Discord(url="https://ptb.discord.com/api/webhooks/947919924662272060/OIJOK29aZwDPWUtIL0OEsr6uUiCVZ-GPkiRcYcy9Scg0P9IdrjEdXsoSTJYRjCiY5FSc")
+
+# Crypto icons ids
 crypto_icons = {"BTC": "1", "ETH": "1027", "BNB": "1839", "XRP": "52", "LUNA": "4172", "SOL": "5426", "ADA": "2010", "AVAX": "5805", "DOT": "6636", "DOGE": "74", "SHIB": "5994"}
 
 # Function to get the datetime for the selected timezone.

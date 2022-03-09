@@ -1,8 +1,9 @@
 import os
 import dotenv
-from bot import CryptoBot
+from cryptoBot import CryptoBot
 
-# Loading environmental variables
+
+# Loading the environmental variables
 dotenv.load_dotenv()
 api_key = os.getenv('BINANCE_API_KEY')
 api_secret = os.getenv('BINANCE_SECRET')
