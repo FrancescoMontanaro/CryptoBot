@@ -1,3 +1,4 @@
+import utils
 import threading
 import pandas as pd
 import datetime as dt
@@ -6,8 +7,7 @@ from binance import ThreadedWebsocketManager
 
 
 class DataCollector:
-    ### PRIVATE METHODS ###
-
+    """ PRIVATE METHODS """
     # Class constructor
     def __init__(self, api_key, api_secret, symbols, against_symbol="USDT", interval="1m", lookback_days=2) -> None:
         # Initializing object's attributes
@@ -15,7 +15,7 @@ class DataCollector:
         self.against_symbol = against_symbol
         self.interval = interval
         self.lookback_days = lookback_days
-        self.status = "INACTIVE"
+        self.status = "DISCONNECTED"
 
         # Creating dataframes to containing historical data of the symbols
         self.symbols_dataframes = {symbol: None for symbol in self.symbols}
@@ -30,7 +30,7 @@ class DataCollector:
         self.client = Client(api_key=api_key, api_secret=api_secret)
 
         # Instantiating the websocket manager
-        self.twm = ThreadedWebsocketManager(api_key=self.api_key, api_secret=self.api_secret)
+        self.twm = ThreadedWebsocketManager(api_key=api_key, api_secret=api_secret)
 
 
     # Function to collect historical data for a specific symbol
@@ -67,8 +67,14 @@ class DataCollector:
 
     # Callback function to collect and update symbols' data
     def __updateSymbolsData(self, msg) -> None:
+        # Error handling
+        if msg["e"] == "error" and msg["m"] == "Max reconnect retries reached":
+            self.status = "DISCONNECTED"
+            utils.log("Websocket Disconnected.")
+            raise Exception("Websocket Disconnected")
+
         # If the candle's open time is not present in the symbol's dataframe, it is added and the oldest candle is removed
-        if msg["k"]["t"] not in self.symbols_dataframes[msg["s"]].index:
+        elif msg["k"]["t"] not in self.symbols_dataframes[msg["s"]].index:
             # Loading the candle's data into a pandas dataframe
             df = pd.DataFrame([[msg["k"]["t"], msg["k"]["o"], msg["k"]["h"], msg["k"]["l"], msg["k"]["c"], msg["k"]["v"]]])
             df.columns = ['time','open', 'high', 'low', 'close', 'volume']
@@ -124,8 +130,14 @@ class DataCollector:
 
     # Callback function to collect and update user's data
     def __updateUserData(self, msg) -> None:
+        # Error handling
+        if msg["e"] == "error" and msg["m"] == "Max reconnect retries reached":
+            self.status = "DISCONNECTED"
+            utils.log("Websocket Disconnected")
+            raise Exception("Websocket Disconnected")
+
         # Updating user's assets balance
-        if msg["e"] == "outboundAccountPosition":
+        elif msg["e"] == "outboundAccountPosition":
             for asset_balance in msg["B"]:
                 account_asset_balance = [balance for balance in self.assets_balances if balance["asset"] == asset_balance["a"]]
                 if len(account_asset_balance) > 0:
@@ -158,16 +170,14 @@ class DataCollector:
                 })
 
 
-    ### PUBLIC METHODS ###
+    """ PUBLIC METHODS """
+    # Function to get the DataCollector status
     def getStatus(self) -> str:
         return self.status
 
 
     # Function to start the data collection
     def start(self) -> None:
-        # Setting the object status to STARTED
-        self.status = "STARING"
-
         # Initializing symbols' hystorical data
         self.__initializeSymbolsData()
 
@@ -183,7 +193,7 @@ class DataCollector:
         self.twm.start_user_socket(callback=self.__updateUserData)
 
         # Setting the object status to READY
-        self.status = "READY"
+        self.status = "CONNECTED"
 
         # Joining the threads with the main thread
         self.twm.join()

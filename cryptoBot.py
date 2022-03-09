@@ -8,8 +8,7 @@ from dataCollector import DataCollector
 
 
 class CryptoBot:
-    ### PRIVATE METHODS ###
-
+    """ PRIVATE METHODS """
     # Class constructor
     def __init__(self, api_key, api_secret, symbols, minumum_profit, against_symbol="USDT", interval="1m", rsi_window=13, rsi_threshold=20.0) -> None:
         # Initializing object's attributes
@@ -25,8 +24,8 @@ class CryptoBot:
 
         # Instantiating the DataCollector object
         self.data_collector = DataCollector(
-            api_key=self.api_key, 
-            api_secret=self.api_secret, 
+            api_key=api_key, 
+            api_secret=api_secret, 
             symbols=self.symbols, 
             against_symbol=self.against_symbol, 
             interval=self.interval
@@ -307,8 +306,7 @@ class CryptoBot:
                     break
 
 
-    ### PUBLIC METHODS ###
-    
+    """ PUBLIC METHODS """
     # Function to start the CryptoBot's execution
     def start(self) -> None:
         # Creating the objects threads
@@ -320,7 +318,7 @@ class CryptoBot:
 
         # Waititing until the Datacollector is ready
         data_collector_status = self.data_collector.getStatus()
-        while data_collector_status != "READY":
+        while data_collector_status != "CONNECTED":
             data_collector_status = self.data_collector.getStatus()
             time.sleep(1)
 
