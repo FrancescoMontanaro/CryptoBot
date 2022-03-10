@@ -215,8 +215,8 @@ class CryptoBot:
                     try:
                         # Sending a buying notification to the Discord channel
                         utils.sendWebhook(
-                            title=symbol.replace(self.against_symbol, ""),
-                            description=f'Price: **{buy_price} {self.against_symbol}**\nQuantity invested: **{investment} {self.against_symbol}**\nQuantity bought: **{buy_order["quantity"]} {symbol}**\nRSI: **{rsi}**',
+                            symbol=symbol.replace(self.against_symbol, ""),
+                            description=f'Price: **{buy_price} {self.against_symbol}**\nQuantity invested: **{investment} {self.against_symbol}**\nQuantity bought: **{buy_order["quantity"]} {symbol.replace(self.against_symbol, "")}**\nRSI: **{rsi}**',
                             color=6146183
                         )
                     except Exception as e:
@@ -227,6 +227,7 @@ class CryptoBot:
 
                 # if the order is partially filled or pending cancellation, checks again the order status by jumping to the next iteration.
                 elif buy_order["status"] == "PARTIALLY_FILLED" or buy_order["status"] == "PENDING_CANCEL":
+                    time.sleep(1)
                     continue
 
                 # If the order is Rejected, Canceled or Expired, the process restarts by looking for buying opportunities.
@@ -244,7 +245,6 @@ class CryptoBot:
                         try:
                             # Canceling the order
                             self.client.cancel_order(symbol=symbol, orderId=buy_order["id"])
-                        
                         except Exception as e:
                             utils.log(f'Error canceling order ({buy_order["id"]}): {str(e)}')
 
@@ -288,7 +288,7 @@ class CryptoBot:
 
                         # Sending a selling notification to the Discord channel
                         utils.sendWebhook(
-                            title=symbol,
+                            symbol=symbol.replace(self.against_symbol, ""),
                             description=f'Price: **{sell_price} {self.against_symbol}**\nTransaction profit: **{profit} {self.against_symbol}**\nBalance: **{round(account_balance, 3)} {self.against_symbol}**',
                             color=14898529
                         )

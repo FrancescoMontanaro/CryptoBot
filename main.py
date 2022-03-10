@@ -1,4 +1,5 @@
 import os
+import utils
 import dotenv
 from cryptoBot import CryptoBot
 
@@ -29,5 +30,8 @@ crypto_bot = CryptoBot(
 )
 
 if __name__ == "__main__":
-    # Starting the bot's execution
-    crypto_bot.start()
+    try:
+        # Starting the bot's execution
+        crypto_bot.start()
+    except Exception as e:
+        utils.log(f'FATAL ERROR --> {str(e)}')
