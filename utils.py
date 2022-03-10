@@ -17,8 +17,6 @@ discord = Discord(url=webhook_url)
 logFile = "logs.log"
 logging.basicConfig(filename=logFile, level=logging.ERROR)
 
-# Crypto icons ids
-crypto_icons = {"BTC": "1", "ETH": "1027", "BNB": "1839", "XRP": "52", "LUNA": "4172", "SOL": "5426", "ADA": "2010", "AVAX": "5805", "DOT": "6636", "DOGE": "74", "SHIB": "5994"}
 
 # Function to get the datetime for the selected timezone.
 def getDatetime() -> dt.datetime:
@@ -49,9 +47,6 @@ def sendWebhook(symbol, description, color) -> None:
         "footer": { "text": "Crypto Bot"},
         "timestamp": str(getDatetime())
     }
-
-    if(symbol in crypto_icons.keys()):
-        embed["thumbnail"] = f"https://s2.coinmarketcap.com/static/img/coins/128x128/{crypto_icons[symbol]}.png"
 
     # Posting the message in the Discord channel
     discord.post(embeds=[embed])

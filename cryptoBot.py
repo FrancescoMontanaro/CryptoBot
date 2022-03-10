@@ -211,7 +211,7 @@ class CryptoBot:
                     continue
 
                 # Order Filled
-                if buy_order["status"] == "FILLED":
+                if buy_order["status"] == "FILLED" or (buy_order["status"] == "TRADE" and buy_order["filled_quantity"] >= buy_order["quantity"]):
                     try:
                         # Sending a buying notification to the Discord channel
                         utils.sendWebhook(
@@ -225,8 +225,8 @@ class CryptoBot:
                         # Mark the position as open
                         open_position = True
 
-                # if the order is partially filled or pending cancellation, checks again the order status by jumping to the next iteration.
-                elif buy_order["status"] == "PARTIALLY_FILLED" or buy_order["status"] == "PENDING_CANCEL":
+                # if the order is partially filled, checks again the order status by jumping to the next iteration.
+                elif buy_order["status"] == "PARTIALLY_FILLED" or (buy_order["status"] == "TRADE" and buy_order["filled_quantity"] < buy_order["quantity"]):
                     time.sleep(1)
                     continue
 
@@ -277,7 +277,7 @@ class CryptoBot:
                     continue
 
                 # Order Filled
-                if sell_order["status"] == "FILLED":
+                if sell_order["status"] == "FILLED" or (sell_order["status"] == "TRADE" and sell_order["filled_quantity"] >= sell_order["quantity"]):
                     try:
                         # Fetching the current account balance
                         account_balance = self.data_collector.getAssetBalance(self.against_symbol)

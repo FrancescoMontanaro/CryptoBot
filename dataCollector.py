@@ -121,10 +121,11 @@ class DataCollector:
                 "symbol": open_order["symbol"],
                 "side": open_order["side"],
                 "type": open_order["type"],
-                "quantity": open_order["origQty"],
+                "quantity": float(open_order["origQty"]),
                 "price": open_order["price"],
                 "status": open_order["status"],
-                "timestamp": open_order["time"]
+                "timestamp": open_order["time"],
+                "filled_quantity": float(open_order["executedQty"])
             })
 
 
@@ -154,7 +155,8 @@ class DataCollector:
                 orders = [o for o in self.orders if o["id"] == msg['i']]
                 if len(orders) > 0:
                     order = orders[0]
-                    order["status"] = msg["x"]
+                    order["status"] = msg["X"]
+                    order["filled_quantity"] = float(msg["z"])
 
             # Adding the order if it is not present
             else:
@@ -163,10 +165,11 @@ class DataCollector:
                     "symbol": msg["s"],
                     "side": msg["S"],
                     "type": msg["o"],
-                    "quantity": msg["q"],
+                    "quantity": float(msg["q"]),
                     "price": msg["p"],
-                    "status": msg["x"],
-                    "timestamp": msg["T"]
+                    "status": msg["X"],
+                    "timestamp": msg["T"],
+                    "filled_quantity": float(msg["z"])
                 })
 
 
