@@ -144,8 +144,8 @@ class DataCollector:
                     account_asset_balance = account_asset_balance[0]
 
                 # Updating the free and locked quantity of the asset
-                account_asset_balance["free"] = asset_balance["f"]
-                account_asset_balance["locked"] = asset_balance["l"]
+                account_asset_balance["free"] = float(asset_balance["f"])
+                account_asset_balance["locked"] = float(asset_balance["l"])
 
         # Updating user's open orders
         elif msg["e"] == "executionReport":
@@ -217,8 +217,8 @@ class DataCollector:
     # Function to get an order by id
     def getOrder(self, order_id) -> dict:
         order = None
-        for o in self.orders:
-            if o["id"] == order_id:
-                order = order
+        for stored_order in self.orders:
+            if stored_order["id"] == order_id:
+                order = stored_order
 
         return order

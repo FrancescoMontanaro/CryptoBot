@@ -65,7 +65,7 @@ class CryptoBot:
 
 
     # Function to truncate a number after a specific number of decimals
-    def __truncateNumber(number, digits) -> float:
+    def __truncateNumber(self, number, digits) -> float:
         stepper = 10.0 ** digits
         truncated_number = math.trunc(stepper * number) / stepper
         
@@ -92,7 +92,7 @@ class CryptoBot:
         )
 
         # Extracting order id
-        order_id = order["id"]
+        order_id = order["orderId"]
 
         return order_id
 
@@ -104,7 +104,7 @@ class CryptoBot:
 
         # Fetching the quantity of the crypto to sell 
         symbol_balance = self.data_collector.getAssetBalance(symbol.replace(self.against_symbol, ""))
-        symbol_balance = symbol_balance["free"]
+        symbol_balance = float(symbol_balance["free"])
 
         quantity = amount if amount <= symbol_balance else symbol_balance
 
@@ -122,7 +122,7 @@ class CryptoBot:
         )
 
         # Extracting order id
-        order_id = order["id"]
+        order_id = order["orderId"]
 
         return order_id
 
@@ -162,6 +162,7 @@ class CryptoBot:
         # Filtering symbols whose RSI value is under the specified threshold
         symbols_data = [symbol_data for symbol_data in symbols_data if symbol_data[1] <= self.rsi_threshold]
 
+        buying_opportunity = None
         if(len(symbols_data) > 0):
             # Sorting symbols by their RSI value
             symbols_data.sort(key=lambda symbol_data:symbol_data[1])
@@ -169,10 +170,7 @@ class CryptoBot:
             # Selecting the best buying opportunity as the one with the lowest RSI value
             buying_opportunity = symbols_data[0]
 
-            return buying_opportunity
-
-        else:
-            return None
+        return buying_opportunity
 
 
     # Bot's trading process
@@ -182,10 +180,10 @@ class CryptoBot:
             # Looking for a buying opportunity (RSI < threshold)
             buy_opportunity = None
             while buy_opportunity is None:
-                buying_opportunity = self.__buyingOpportunity()
+                buy_opportunity = self.__buyingOpportunity()
 
             # Buy opportunity found
-            symbol, rsi, buy_price = buying_opportunity
+            symbol, rsi, buy_price = buy_opportunity
 
             ### BUYING PROCESS ###
             # Creating a buying order.
@@ -193,7 +191,7 @@ class CryptoBot:
             try:
                 # Fetching the amount to invest
                 investment = self.data_collector.getAssetBalance(self.against_symbol)
-                investment = investment["free"]
+                investment = float(investment["free"])
 
                 # Creating the buying order
                 buy_order_id = self.__buyOrder(symbol, buy_price, investment)
@@ -209,6 +207,7 @@ class CryptoBot:
 
                 # Waiting until the buying order information are available before proceeding
                 if buy_order is None:
+                    time.sleep(1)
                     continue
 
                 # Order Filled
@@ -236,7 +235,7 @@ class CryptoBot:
 
                 else:
                     # Fetching the last RSI value and the price of the symbol
-                    _, last_rsi, last_price = self.__computeRSI(symbol)
+                    _, last_rsi, last_price = self.__computeRSI(symbol, self.rsi_window)
 
                     # If during the fulfillment operation the RSI value decreases while the
                     # last price of the symbol increases, the order is canceled: the previous 
@@ -248,6 +247,8 @@ class CryptoBot:
                         
                         except Exception as e:
                             utils.log(f'Error canceling order ({buy_order["id"]}): {str(e)}')
+
+                time.sleep(1)
 
             ### SELLING PROCESS ###
             sell_order_id = None
@@ -264,12 +265,15 @@ class CryptoBot:
                     except Exception as e:
                         utils.log(f'Error creating SELL order: {str(e)}')
                         continue
+                    finally:
+                        time.sleep(1)
 
                 # Fetching sell order information
                 sell_order = self.data_collector.getOrder(sell_order_id)
 
                 # Waiting until the selling order information are available before proceeding
                 if sell_order is None:
+                    time.sleep(1)
                     continue
 
                 # Order Filled
@@ -277,7 +281,7 @@ class CryptoBot:
                     try:
                         # Fetching the current account balance
                         account_balance = self.data_collector.getAssetBalance(self.against_symbol)
-                        account_balance = account_balance["free"]
+                        account_balance = float(account_balance["free"])
 
                         # Computing the profit obtained from the transaction
                         profit = round(((account_balance * (sell_price / buy_price)) - account_balance), 3)
@@ -305,6 +309,8 @@ class CryptoBot:
                 elif sell_order["status"] == "CANCELED":
                     break
 
+                time.sleep(1)
+
 
     """ PUBLIC METHODS """
     # Function to start the CryptoBot's execution
@@ -316,7 +322,7 @@ class CryptoBot:
         # Starting the DataCollector's main thread
         data_collector_thread.start()
 
-        # Waititing until the Datacollector is ready
+        # Waiting until the DataCollector is connected to the websocket
         data_collector_status = self.data_collector.getStatus()
         while data_collector_status != "CONNECTED":
             data_collector_status = self.data_collector.getStatus()
