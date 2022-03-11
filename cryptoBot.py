@@ -18,6 +18,7 @@ class CryptoBot:
         self.interval = interval
         self.rsi_window = rsi_window
         self.rsi_threshold = rsi_threshold
+        self.open_position = False
 
         # Instantiating the Binance API Client
         self.client = Client(api_key=api_key, api_secret=api_secret)
@@ -200,8 +201,8 @@ class CryptoBot:
                 continue
 
             # Checking for buying order fulfillment.
-            open_position = False
-            while not open_position:
+            self.open_position = False
+            while not self.open_position:
                 # Getting buy order information
                 buy_order = self.data_collector.getOrder(buy_order_id)
 
@@ -223,7 +224,7 @@ class CryptoBot:
                         utils.log(f'Error sending BUYING report: {str(e)}')
                     else:
                         # Mark the position as open
-                        open_position = True
+                        self.open_position = True
 
                 # if the order is partially filled, checks again the order status by jumping to the next iteration.
                 elif buy_order["status"] == "PARTIALLY_FILLED" or (buy_order["status"] == "TRADE" and buy_order["filled_quantity"] < buy_order["quantity"]):
@@ -232,6 +233,8 @@ class CryptoBot:
 
                 # If the order is Rejected, Canceled or Expired, the process restarts by looking for buying opportunities.
                 elif buy_order["status"] == "CANCELED" or buy_order["status"] == "REJECTED" or buy_order["status"] == "EXPIRED":
+                    # Deleting order from the memory
+                    self.data_collector.deleteOrder(buy_order_id)
                     break
 
                 else:
@@ -252,7 +255,7 @@ class CryptoBot:
 
             ### SELLING PROCESS ###
             sell_order_id = None
-            while open_position:
+            while self.open_position:
                 # Creating a selling order.
                 # If an error occurs, the process restarts by trying to open another sell order.
                 while sell_order_id is None:
@@ -293,20 +296,29 @@ class CryptoBot:
                             color=14898529
                         )
 
+                        # Deleting orders from the memory
+                        self.data_collector.deleteOrder(buy_order_id)
+                        self.data_collector.deleteOrder(sell_order_id)
+
                     except Exception as e:
                         utils.log(f'Error sending SELLING report: {str(e)}')
                         
                     else:
                         # Mark the position as close
-                        open_position = False
+                        self.open_position = False
 
                 # if the order is Rejected, Canceled or Expired, the process restarts by trying to open another selling order
                 elif sell_order["status"] == "REJECTED" or sell_order["status"] == "EXPIRED":
+                    # Deleting orders from the memory
+                    self.data_collector.deleteOrder(sell_order_id)
+
                     # Mark the selling order as not open
                     sell_order_id = None
                 
                 # If the order has been manually canceled from the user, it breaks the cycle.
                 elif sell_order["status"] == "CANCELED":
+                    # Deleting orders from the memory
+                    self.data_collector.deleteOrder(sell_order_id)
                     break
 
                 time.sleep(1)

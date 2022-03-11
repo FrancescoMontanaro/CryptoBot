@@ -225,3 +225,8 @@ class DataCollector:
                 order = stored_order
 
         return order
+
+
+    # Function to delete an order by its id
+    def deleteOrder(self, order_id) -> None:
+        self.orders = [order for order in self.orders if order["id"] != order_id]
