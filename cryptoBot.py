@@ -233,7 +233,7 @@ class CryptoBot:
 
                 # If the order is Rejected, Canceled or Expired, the process restarts by looking for buying opportunities.
                 elif buy_order["status"] == "CANCELED" or buy_order["status"] == "REJECTED" or buy_order["status"] == "EXPIRED":
-                    # Deleting order from the memory
+                    # Deleting buy order from the memory
                     self.data_collector.deleteOrder(buy_order_id)
                     break
 
@@ -309,7 +309,7 @@ class CryptoBot:
 
                 # if the order is Rejected, Canceled or Expired, the process restarts by trying to open another selling order
                 elif sell_order["status"] == "REJECTED" or sell_order["status"] == "EXPIRED":
-                    # Deleting orders from the memory
+                    # Deleting sell order from the memory
                     self.data_collector.deleteOrder(sell_order_id)
 
                     # Mark the selling order as not open
@@ -317,7 +317,7 @@ class CryptoBot:
                 
                 # If the order has been manually canceled from the user, it breaks the cycle.
                 elif sell_order["status"] == "CANCELED":
-                    # Deleting orders from the memory
+                    # Deleting sell order from the memory
                     self.data_collector.deleteOrder(sell_order_id)
                     break
 

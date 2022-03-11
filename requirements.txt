@@ -1,0 +1,6 @@
+binance==0.3
+discordwebhook==1.0.3
+pandas==1.4.0
+python-dotenv==0.19.2
+python_binance==1.0.15
+pytz==2021.3
