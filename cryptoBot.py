@@ -244,7 +244,7 @@ class CryptoBot:
 
                 else:
                     # Fetching the last RSI value and the price of the symbol
-                    _, current_rsi, current_price = self.__computeRSI(symbol, self.rsi_window)
+                    _, current_rsi, current_price = self.__computeIndicators(symbol, self.rsi_window)
 
                     # Getting the time elapsed seconds from the creation of the order
                     current_time = dt.datetime.now()
