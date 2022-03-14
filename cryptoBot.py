@@ -2,6 +2,7 @@ import math
 import time
 import utils
 import threading
+import datetime as dt
 import concurrent.futures
 from binance.client import Client
 from dataCollector import DataCollector
@@ -19,6 +20,7 @@ class CryptoBot:
         self.rsi_window = rsi_window
         self.rsi_threshold = rsi_threshold
         self.open_position = False
+        self.timeout = 120
 
         # Instantiating the Binance API Client
         self.client = Client(api_key=api_key, api_secret=api_secret)
@@ -128,7 +130,7 @@ class CryptoBot:
         return order_id
 
     
-    def __computeRSI(self, symbol, rsi_window) -> tuple:
+    def __computeIndicators(self, symbol, rsi_window) -> tuple:
         # Getting the symbol's data from the DataCollector object
         dataframe = self.data_collector.getSymbolData(symbol)
 
@@ -145,10 +147,10 @@ class CryptoBot:
         dataframe["rsi"] = round((100.0 - (100.0 / (1.0 + relative_strength))), 3)
 
         # Extracting the current RSI value and close price
-        last_rsi = dataframe["rsi"].tail(1).values[0]
-        last_price = dataframe["close"].tail(1).values[0]
+        current_rsi = dataframe["rsi"].tail(1).values[0]
+        current_price = dataframe["close"].tail(1).values[0]
 
-        return symbol, last_rsi, last_price
+        return symbol, current_rsi, current_price
 
 
     # Function to check for some buying opportunity
@@ -156,7 +158,7 @@ class CryptoBot:
         # Computing the RSI indicator for every symbol in the list
         symbols_data = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(self.symbols)) as executor:
-            futures = {executor.submit(self.__computeRSI, symbol, self.rsi_window): symbol for symbol in self.symbols}
+            futures = {executor.submit(self.__computeIndicators, symbol, self.rsi_window): symbol for symbol in self.symbols}
             for future in concurrent.futures.as_completed(futures):
                 symbols_data.append(future.result())
 
@@ -196,6 +198,9 @@ class CryptoBot:
 
                 # Creating the buying order
                 buy_order_id = self.__buyOrder(symbol, buy_price, investment)
+
+                # Saving the timestamp in which the buying order has been placed
+                creation_time = dt.datetime.now()
             except Exception as e:
                 utils.log(f'Error creating BUYING order: {str(e)}')
                 continue
@@ -239,12 +244,16 @@ class CryptoBot:
 
                 else:
                     # Fetching the last RSI value and the price of the symbol
-                    _, last_rsi, last_price = self.__computeRSI(symbol, self.rsi_window)
+                    _, current_rsi, current_price = self.__computeRSI(symbol, self.rsi_window)
+
+                    # Getting the time elapsed seconds from the creation of the order
+                    current_time = dt.datetime.now()
+                    elapsed_time = (current_time - creation_time).seconds
 
                     # If during the fulfillment operation the RSI value decreases while the
                     # last price of the symbol increases, the order is canceled: the previous 
                     # buying condition is no longer the best.
-                    if last_rsi < rsi and last_price > buy_price:
+                    if (current_rsi < rsi and current_price > buy_price) or elapsed_time >= self.timeout:
                         try:
                             # Canceling the order
                             self.client.cancel_order(symbol=symbol, orderId=buy_order["id"])
