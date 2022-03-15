@@ -13,7 +13,7 @@ api_secret = os.getenv('BINANCE_SECRET')
 symbols = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "LUNAUSDT", "SOLUSDT", "ADAUSDT", "AVAXUSDT", "DOTUSDT", "DOGEUSDT", "SHIBUSDT"]
 against_symbol = "USDT"
 minimum_profit = 1.003
-rsi_threshold = 24.0
+rsi_threshold = 25.0
 rsi_window = 13
 interval = '1m'
 

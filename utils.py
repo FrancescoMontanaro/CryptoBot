@@ -13,10 +13,9 @@ dotenv.load_dotenv()
 webhook_url = os.getenv('DISCORD_WEBHOOK_URL')
 discord = Discord(url=webhook_url)
 
-# Logs file initialization
-logFile = "logs.log"
-logging.basicConfig(filename=logFile, level=logging.ERROR)
-
+# Logs file
+log_file = "logs.log"
+logging.basicConfig(filename=log_file, level=logging.ERROR)
 
 # Function to get the datetime for the selected timezone.
 def getDatetime() -> dt.datetime:
@@ -27,14 +26,14 @@ def getDatetime() -> dt.datetime:
 
 # Function to log errors
 def log(data) -> None:
-    f = open(logFile,'r')
+    f = open(log_file,'r')
     lines = f.readlines()
     f.close()
 
     if(len(lines) > 1000):
-        open(logFile,'w').close()
+        open(log_file,'w').close()
 
-    logging.error('%s | %s' % (str(dt.datetime.now()), data))
+    logging.error('%s --> %s' % (str(dt.datetime.now()), data))
 
 
 # Function to send Discord notifications
