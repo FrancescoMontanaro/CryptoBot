@@ -134,9 +134,9 @@ class CryptoBot:
         # Getting the symbol's data from the DataCollector object
         dataframe = self.data_collector.getSymbolData(symbol)
 
-        dataframe["delta"] = delta = dataframe["close"].diff()
-        dataframe["up"] = up = delta.clip(lower=0)
-        dataframe["down"] = down = -1 * delta.clip(upper=0)
+        delta = dataframe["close"].diff()
+        up = delta.clip(lower=0)
+        down = - 1 * delta.clip(upper=0)
 
         # Computing the exponential moving average
         ema_up = up.ewm(com=rsi_window, adjust=False).mean()
@@ -187,6 +187,8 @@ class CryptoBot:
 
             # Buy opportunity found
             symbol, rsi, buy_price = buy_opportunity
+
+            continue
 
             ### BUYING PROCESS ###
             # Creating a buying order.
