@@ -1,5 +1,4 @@
 import os
-import utils
 import dotenv
 from cryptoBot import CryptoBot
 
@@ -29,9 +28,7 @@ crypto_bot = CryptoBot(
     rsi_threshold=rsi_threshold
 )
 
+
+# Starting the bot's execution
 if __name__ == "__main__":
-    try:
-        # Starting the bot's execution
-        crypto_bot.start()
-    except Exception as e:
-        utils.log(f'FATAL ERROR --> {str(e)}')
+    crypto_bot.start()

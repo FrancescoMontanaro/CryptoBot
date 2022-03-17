@@ -1,4 +1,4 @@
 .env
 .DS_Store
-logs.log
+logs.txt
 __pycache__/

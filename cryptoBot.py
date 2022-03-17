@@ -2,6 +2,7 @@ import math
 import time
 import utils
 import threading
+import pandas as pd
 import datetime as dt
 import concurrent.futures
 from binance.client import Client
@@ -129,49 +130,89 @@ class CryptoBot:
 
         return order_id
 
-    
-    def __computeIndicators(self, symbol, rsi_window) -> tuple:
-        # Getting the symbol's data from the DataCollector object
-        dataframe = self.data_collector.getSymbolData(symbol)
 
+    # Function to compute the RSI indicator for a given symbol
+    def __RSI(self, dataframe) -> pd.Series:
         delta = dataframe["close"].diff()
         up = delta.clip(lower=0)
         down = - 1 * delta.clip(upper=0)
 
         # Computing the exponential moving average
-        ema_up = up.ewm(com=rsi_window, adjust=False).mean()
-        ema_down = down.ewm(com=rsi_window, adjust=False).mean()
+        ema_up = up.ewm(com=self.rsi_window, adjust=False).mean()
+        ema_down = down.ewm(com=self.rsi_window, adjust=False).mean()
 
         # Computing the relative strength index
         relative_strength = ema_up / ema_down
-        dataframe["rsi"] = round((100.0 - (100.0 / (1.0 + relative_strength))), 3)
+        rsi = round((100.0 - (100.0 / (1.0 + relative_strength))), 3)
 
-        # Extracting the current RSI value and close price
-        current_rsi = dataframe["rsi"].tail(1).values[0]
-        current_price = dataframe["close"].tail(1).values[0]
+        return rsi
 
-        return symbol, current_rsi, current_price
+    
+    # Function to compute the required indicators of a given symbol
+    def __computeIndicators(self, dataframe) -> tuple:
+        # Computing the RSI indicator
+        dataframe["rsi"] = self.__RSI(dataframe)
+
+        return dataframe
+
+
+    # Function to collect the data of a symbol and to compute the required inidcators
+    def __symbolData(self, symbol) -> dict:
+        # Getting the symbol's data from the DataCollector object
+        dataframe = self.data_collector.getSymbolData(symbol)
+
+        # Computing the required indicators
+        dataframe = self.__computeIndicators(dataframe)
+
+        return {"symbol": symbol, "historical_data": dataframe}
+
+
+    # Function to collect the data of all the symbols in the list and compute the required inidcators
+    def __symbolsData(self) -> list:
+        symbols_data = []
+
+        # Fetching the data and computing the indicators for every symbol in the list
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(self.symbols)) as executor:
+            futures = {executor.submit(self.__symbolData, symbol): symbol for symbol in self.symbols}
+            for future in concurrent.futures.as_completed(futures):
+                symbols_data.append(future.result())
+
+        return symbols_data
+
+    
+    # Function to determine if the buying conditions for a given symbol are satisfied
+    def __buyConditions(self, symbol_data) -> bool:
+        # Extracting the historical data of the symbol
+        historical_data = symbol_data["historical_data"]
+
+        # Extracting the latest 3 RSI values
+        latest_rsi_values = historical_data["rsi"].tail(3)
+
+        # Checking if the latest rsi values are monotonically increasing in the selected range of values
+        if latest_rsi_values.is_monotonic_increasing and all(latest_rsi_values.values[:2] < 50) and latest_rsi_values.values[2] >= 50:
+            return True
+        else:
+            return False
 
 
     # Function to check for some buying opportunity
     def __buyingOpportunity(self) -> tuple:
-        # Computing the RSI indicator for every symbol in the list
-        symbols_data = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(self.symbols)) as executor:
-            futures = {executor.submit(self.__computeIndicators, symbol, self.rsi_window): symbol for symbol in self.symbols}
-            for future in concurrent.futures.as_completed(futures):
-                symbols_data.append(future.result())
+        # Getting the data of the symbols
+        symbols_data = self.__symbolsData()
 
-        # Filtering symbols whose RSI value is under the specified threshold
-        symbols_data = [symbol_data for symbol_data in symbols_data if symbol_data[1] <= self.rsi_threshold]
+        # Filtering symbols that satisfy the buying conditions
+        symbols_data = [symbol_data for symbol_data in symbols_data if self.__buyConditions(symbol_data)]
 
         buying_opportunity = None
         if(len(symbols_data) > 0):
-            # Sorting symbols by their RSI value
-            symbols_data.sort(key=lambda symbol_data:symbol_data[1])
+            # Sorting symbols by their RSI variation
+            symbols_data.sort(key=lambda symbol_data: (symbol_data["historical_data"].iloc[-3]["rsi"] / symbol_data["historical_data"].iloc[-1]["rsi"]))
 
-            # Selecting the best buying opportunity as the one with the lowest RSI value
-            buying_opportunity = symbols_data[0]
+            # Selecting the symbol to invest in as the one with the lowest RSI variation
+            selected_symbol = symbols_data[0]
+
+            # Extracting the values to be used in the trading operation
+            buying_opportunity = (selected_symbol["symbol"], selected_symbol["historical_data"].iloc[-1]["rsi"], selected_symbol["historical_data"].iloc[-1]["close"])
 
         return buying_opportunity
 
@@ -187,8 +228,6 @@ class CryptoBot:
 
             # Buy opportunity found
             symbol, rsi, buy_price = buy_opportunity
-
-            continue
 
             ### BUYING PROCESS ###
             # Creating a buying order.
@@ -246,7 +285,8 @@ class CryptoBot:
 
                 else:
                     # Fetching the last RSI value and the price of the symbol
-                    _, current_rsi, current_price = self.__computeIndicators(symbol, self.rsi_window)
+                    symbol_data = self.__symbolData(symbol)
+                    symbol_data = symbol_data["historical_data"]
 
                     # Getting the time elapsed seconds from the creation of the order
                     current_time = dt.datetime.now()
@@ -255,7 +295,7 @@ class CryptoBot:
                     # If during the fulfillment operation the RSI value decreases while the
                     # last price of the symbol increases, the order is canceled: the previous 
                     # buying condition is no longer the best.
-                    if (current_rsi < rsi and current_price > buy_price) or elapsed_time >= self.timeout:
+                    if (symbol_data.iloc[-1]["rsi"] < rsi and symbol_data.iloc[-1]["close"] > buy_price) or elapsed_time >= self.timeout:
                         try:
                             # Canceling the order
                             self.client.cancel_order(symbol=symbol, orderId=buy_order["id"])
@@ -350,6 +390,8 @@ class CryptoBot:
         while data_collector_status != "CONNECTED":
             data_collector_status = self.data_collector.getStatus()
             time.sleep(1)
+
+        utils.log("BOT CONNECTED!")
 
         # Starting the CryptoBot's main thread
         crypto_bot_thread.start()

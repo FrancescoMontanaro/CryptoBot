@@ -9,12 +9,13 @@ from binance import ThreadedWebsocketManager
 class DataCollector:
     """ PRIVATE METHODS """
     # Class constructor
-    def __init__(self, api_key, api_secret, symbols, against_symbol="USDT", interval="1m", lookback_days=2) -> None:
+    def __init__(self, api_key, api_secret, symbols, against_symbol="USDT", interval="1m", lookback_days=1, lookback_hours=2) -> None:
         # Initializing object's attributes
         self.symbols = symbols
         self.against_symbol = against_symbol
         self.interval = interval
         self.lookback_days = lookback_days
+        self.lookback_hours = lookback_hours
         self.status = "DISCONNECTED"
 
         # Creating dataframes to containing historical data of the symbols
@@ -37,7 +38,7 @@ class DataCollector:
     def __historicalData(self, symbol) -> None:
         # Defining the start period
         start = dt.datetime.now().timestamp()
-        start = int(start * 1000) - (self.lookback_days * 1 * 60 * 60 * 1000)
+        start = int(start * 1000) - (self.lookback_days * self.lookback_hours * 60 * 60 * 1000)
 
         # Collecting historical data of the symbol
         historical_data = self.client.get_historical_klines(symbol.upper(), self.interval, start)

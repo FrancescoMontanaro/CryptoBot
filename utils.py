@@ -1,7 +1,6 @@
 import os
 import pytz
 import dotenv
-import logging
 import datetime as dt
 from discordwebhook import Discord
 
@@ -14,8 +13,7 @@ webhook_url = os.getenv('DISCORD_WEBHOOK_URL')
 discord = Discord(url=webhook_url)
 
 # Logs file
-log_file = "logs.log"
-logging.basicConfig(filename=log_file, level=logging.ERROR)
+log_file = "logs.txt"
 
 # Function to get the datetime for the selected timezone.
 def getDatetime() -> dt.datetime:
@@ -26,6 +24,9 @@ def getDatetime() -> dt.datetime:
 
 # Function to log errors
 def log(data) -> None:
+    if not os.path.exists(log_file):
+        open(log_file,'w').close()
+        
     f = open(log_file,'r')
     lines = f.readlines()
     f.close()
@@ -33,7 +34,8 @@ def log(data) -> None:
     if(len(lines) > 1000):
         open(log_file,'w').close()
 
-    logging.error('%s --> %s' % (str(dt.datetime.now()), data))
+    with open(log_file, 'a') as f:
+        f.write('%s --> %s\n' % (str(dt.datetime.now()), data))
 
 
 # Function to send Discord notifications
