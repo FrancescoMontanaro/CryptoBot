@@ -207,7 +207,7 @@ class CryptoBot:
             buy_price = buy_opportunity["historical_data"].iloc[-1]["close"]
 
             # Logging operation
-            utils.log(f'Buying opportunity found - Symbol: {symbol} | Buying price: {buy_price}{self.against_symbol}')
+            utils.log(f'Buying opportunity found - Symbol: {symbol} | Buying price: {buy_price} {self.against_symbol}')
 
             ### BUYING PROCESS ###
             # Creating a buying order.
@@ -399,6 +399,9 @@ class CryptoBot:
         data_collector_thread = threading.Thread(target=self.data_collector.start, args=[])
         crypto_bot_thread = threading.Thread(target=self.__trade, args=[])
 
+        # Initializing the logs file
+        utils.initLogFile()
+
         # Starting the DataCollector's main thread
         data_collector_thread.start()
 
@@ -408,7 +411,8 @@ class CryptoBot:
             data_collector_status = self.data_collector.getStatus()
             time.sleep(1)
 
-        utils.log("Bot connected")
+        # Logging the bot's connection status
+        utils.log(f'Bot {data_collector_status.lower()}')
 
         # Starting the CryptoBot's main thread
         crypto_bot_thread.start()

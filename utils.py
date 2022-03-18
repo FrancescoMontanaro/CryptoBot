@@ -53,6 +53,3 @@ def sendWebhook(symbol, description, color) -> None:
 
     # Posting the message in the Discord channel
     discord.post(embeds=[embed])
-
-
-initLogFile()
