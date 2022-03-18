@@ -12,16 +12,14 @@ from dataCollector import DataCollector
 class CryptoBot:
     """ PRIVATE METHODS """
     # Class constructor
-    def __init__(self, api_key, api_secret, symbols, minumum_profit, against_symbol="USDT", interval="1m", rsi_window=14, rsi_threshold=20.0) -> None:
+    def __init__(self, api_key, api_secret, symbols, minumum_profit, against_symbol="USDT", interval="1m") -> None:
         # Initializing object's attributes
         self.symbols = symbols
         self.against_symbol = against_symbol
         self.minumum_profit = minumum_profit
         self.interval = interval
-        self.rsi_window = rsi_window
-        self.rsi_threshold = rsi_threshold
         self.open_position = False
-        self.timeout = 120
+        self.timeout = 60
 
         # Instantiating the Binance API Client
         self.client = Client(api_key=api_key, api_secret=api_secret)
@@ -134,14 +132,11 @@ class CryptoBot:
     # Function to compute the required indicators of a given symbol
     def __computeIndicators(self, dataframe) -> tuple:
         # Computing the RSI indicator
-        dataframe["RSI"] = indicators.RSI(dataframe["close"], self.rsi_window)
-
-        # Computing the MACD indicator
-        dataframe["MACD"], dataframe["MACD_signal"] = indicators.MACD(dataframe["close"])
+        dataframe["RSI"] = indicators.RSI(dataframe["close"], window=14)
 
         # Computing Exponential moving averages
-        dataframe["EMA_50"] = indicators.EMA(dataframe["close"], 50)
-        dataframe["EMA_200"] = indicators.EMA(dataframe["close"], 50)
+        dataframe["EMA_50"] = indicators.EMA(dataframe["close"], window=50)
+        dataframe["EMA_200"] = indicators.EMA(dataframe["close"], window=200)
 
         return dataframe
 
@@ -262,6 +257,7 @@ class CryptoBot:
                     except Exception as e:
                         # Logging error
                         utils.log(f'Error sending buying report: {str(e)}')
+
                     else:
                         # Mark the position as open
                         self.open_position = True
@@ -285,6 +281,10 @@ class CryptoBot:
                     # Fetching the last RSI value and the price of the symbol
                     symbol_data = self.__symbolData(symbol)
 
+                    # Extracting the current RSI and price of the symbol
+                    current_rsi = symbol_data["historical_data"].iloc[-1]["RSI"]
+                    current_price = symbol_data["historical_data"].iloc[-1]["close"]
+
                     # Getting the time elapsed seconds from the creation of the order
                     current_time = dt.datetime.now()
                     elapsed_time = (current_time - creation_time).seconds
@@ -292,10 +292,11 @@ class CryptoBot:
                     # If during the fulfillment operation the RSI value decreases while the
                     # last price of the symbol increases, the order is canceled: the previous 
                     # buying condition is no longer the best.
-                    if (symbol_data["historical_data"].iloc[-1]["RSI"] < rsi and symbol_data["historical_data"].iloc[-1]["close"] > buy_price) or elapsed_time >= self.timeout:
+                    if (current_rsi < rsi and  current_price > buy_price) or elapsed_time >= self.timeout:
                         try:
                             # Canceling the order
                             self.client.cancel_order(symbol=symbol, orderId=buy_order["id"])
+
                         except Exception as e:
                             # Logging error
                             utils.log(f'Error canceling order ({buy_order["id"]}): {str(e)}')
@@ -320,7 +321,8 @@ class CryptoBot:
 
                     except Exception as e:
                         # Logging error
-                        utils.log(f'Error creating sell order: {str(e)}', type="ERROR")
+                        utils.log(f'Error creating sell order: {str(e)}')
+
                         continue
 
                     finally:

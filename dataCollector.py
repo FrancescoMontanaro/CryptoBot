@@ -9,7 +9,7 @@ from binance import ThreadedWebsocketManager
 class DataCollector:
     """ PRIVATE METHODS """
     # Class constructor
-    def __init__(self, api_key, api_secret, symbols, against_symbol="USDT", interval="1m", lookback_days=1, lookback_hours=12) -> None:
+    def __init__(self, api_key, api_secret, symbols, against_symbol="USDT", interval="1m", lookback_days=1, lookback_hours=6) -> None:
         # Initializing object's attributes
         self.symbols = symbols
         self.against_symbol = against_symbol
