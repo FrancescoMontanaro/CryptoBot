@@ -1,7 +1,6 @@
 import os
 import pytz
 import dotenv
-import hashlib
 import datetime as dt
 from discordwebhook import Discord
 
