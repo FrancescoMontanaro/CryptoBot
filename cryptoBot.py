@@ -2,7 +2,7 @@ import math
 import time
 import utils
 import threading
-import pandas as pd
+import indicators
 import datetime as dt
 import concurrent.futures
 from binance.client import Client
@@ -12,7 +12,7 @@ from dataCollector import DataCollector
 class CryptoBot:
     """ PRIVATE METHODS """
     # Class constructor
-    def __init__(self, api_key, api_secret, symbols, minumum_profit, against_symbol="USDT", interval="1m", rsi_window=13, rsi_threshold=20.0) -> None:
+    def __init__(self, api_key, api_secret, symbols, minumum_profit, against_symbol="USDT", interval="1m", rsi_window=14, rsi_threshold=20.0) -> None:
         # Initializing object's attributes
         self.symbols = symbols
         self.against_symbol = against_symbol
@@ -130,28 +130,18 @@ class CryptoBot:
 
         return order_id
 
-
-    # Function to compute the RSI indicator for a given symbol
-    def __RSI(self, dataframe) -> pd.Series:
-        delta = dataframe["close"].diff()
-        up = delta.clip(lower=0)
-        down = - 1 * delta.clip(upper=0)
-
-        # Computing the exponential moving average
-        ema_up = up.ewm(com=self.rsi_window, adjust=False).mean()
-        ema_down = down.ewm(com=self.rsi_window, adjust=False).mean()
-
-        # Computing the relative strength index
-        relative_strength = ema_up / ema_down
-        rsi = round((100.0 - (100.0 / (1.0 + relative_strength))), 3)
-
-        return rsi
-
     
     # Function to compute the required indicators of a given symbol
     def __computeIndicators(self, dataframe) -> tuple:
         # Computing the RSI indicator
-        dataframe["rsi"] = self.__RSI(dataframe)
+        dataframe["RSI"] = indicators.RSI(dataframe["close"], self.rsi_window)
+
+        # Computing the MACD indicator
+        dataframe["MACD"], dataframe["MACD_signal"] = indicators.MACD(dataframe["close"])
+
+        # Computing Exponential moving averages
+        dataframe["EMA_50"] = indicators.EMA(dataframe["close"], 50)
+        dataframe["EMA_200"] = indicators.EMA(dataframe["close"], 50)
 
         return dataframe
 
@@ -179,42 +169,32 @@ class CryptoBot:
 
         return symbols_data
 
-    
-    # Function to determine if the buying conditions for a given symbol are satisfied
-    def __buyConditions(self, symbol_data) -> bool:
-        # Extracting the historical data of the symbol
-        historical_data = symbol_data["historical_data"]
 
-        # Extracting the latest 3 RSI values
-        latest_rsi_values = historical_data["rsi"].tail(3)
-
-        # Checking if the latest rsi values are monotonically increasing in the selected range of values
-        if latest_rsi_values.is_monotonic_increasing and all(latest_rsi_values.values[:2] < 50) and latest_rsi_values.values[2] >= 50:
-            return True
-        else:
-            return False
-
-
-    # Function to check for some buying opportunity
-    def __buyingOpportunity(self) -> tuple:
+    # Function defining the buying strategy
+    def __buyingStrategy(self) -> dict:
         # Getting the data of the symbols
         symbols_data = self.__symbolsData()
 
-        # Filtering symbols that satisfy the buying conditions
-        symbols_data = [symbol_data for symbol_data in symbols_data if self.__buyConditions(symbol_data)]
+        increasing_symbols = []
+        for symbol_data in symbols_data:
+            # Extracting the latest 3 RSI values
+            latest_rsi_values = symbol_data["historical_data"]["RSI"].tail(3) 
 
-        buying_opportunity = None
-        if(len(symbols_data) > 0):
+            # Checking if the latest rsi values are monotonically increasing in the selected range of values
+            if latest_rsi_values.is_monotonic_increasing and all(latest_rsi_values.values[:2] < 50) and latest_rsi_values.values[2] >= 50:
+                increasing_symbols.append(symbol_data)
+
+        if len(increasing_symbols) > 0:
             # Sorting symbols by their RSI variation
-            symbols_data.sort(key=lambda symbol_data: (symbol_data["historical_data"].iloc[-3]["rsi"] / symbol_data["historical_data"].iloc[-1]["rsi"]))
+            increasing_symbols.sort(key=lambda increasing_symbol: (increasing_symbol["historical_data"].iloc[-3]["RSI"] / increasing_symbol["historical_data"].iloc[-1]["RSI"]))
 
             # Selecting the symbol to invest in as the one with the lowest RSI variation
-            selected_symbol = symbols_data[0]
+            selected_symbol = increasing_symbols[0]
 
-            # Extracting the values to be used in the trading operation
-            buying_opportunity = (selected_symbol["symbol"], selected_symbol["historical_data"].iloc[-1]["rsi"], selected_symbol["historical_data"].iloc[-1]["close"])
+            return selected_symbol
 
-        return buying_opportunity
+        else:
+            return None
 
 
     # Bot's trading process
@@ -224,10 +204,15 @@ class CryptoBot:
             # Looking for a buying opportunity (RSI < threshold)
             buy_opportunity = None
             while buy_opportunity is None:
-                buy_opportunity = self.__buyingOpportunity()
+                buy_opportunity = self.__buyingStrategy()
 
             # Buy opportunity found
-            symbol, rsi, buy_price = buy_opportunity
+            symbol = buy_opportunity["symbol"]
+            rsi = buy_opportunity["historical_data"].iloc[-1]["RSI"]
+            buy_price = buy_opportunity["historical_data"].iloc[-1]["close"]
+
+            # Logging operation
+            utils.log(f'Buying opportunity found - Symbol: {symbol} | Buying price: {buy_price}{self.against_symbol}')
 
             ### BUYING PROCESS ###
             # Creating a buying order.
@@ -242,8 +227,12 @@ class CryptoBot:
 
                 # Saving the timestamp in which the buying order has been placed
                 creation_time = dt.datetime.now()
+
+                # Logging operation
+                utils.log(f'Buying order created - Id: {buy_order_id}')
+
             except Exception as e:
-                utils.log(f'Error creating BUYING order: {str(e)}')
+                utils.log(f'Error creating buying order: {str(e)}')
                 continue
 
             # Checking for buying order fulfillment.
@@ -266,8 +255,13 @@ class CryptoBot:
                             description=f'Price: **{buy_price} {self.against_symbol}**\nQuantity invested: **{investment} {self.against_symbol}**\nQuantity bought: **{buy_order["quantity"]} {symbol.replace(self.against_symbol, "")}**\nRSI: **{rsi}**',
                             color=6146183
                         )
+
+                        # Logging operation
+                        utils.log(f'Buying order filled - Id: {buy_order_id}')
+
                     except Exception as e:
-                        utils.log(f'Error sending BUYING report: {str(e)}')
+                        # Logging error
+                        utils.log(f'Error sending buying report: {str(e)}')
                     else:
                         # Mark the position as open
                         self.open_position = True
@@ -281,12 +275,15 @@ class CryptoBot:
                 elif buy_order["status"] == "CANCELED" or buy_order["status"] == "REJECTED" or buy_order["status"] == "EXPIRED":
                     # Deleting buy order from the memory
                     self.data_collector.deleteOrder(buy_order_id)
+
+                    # logging operation
+                    utils.log(f'Buying order {buy_order["status"].lower()} - Id: {buy_order_id}')
+                    
                     break
 
                 else:
                     # Fetching the last RSI value and the price of the symbol
                     symbol_data = self.__symbolData(symbol)
-                    symbol_data = symbol_data["historical_data"]
 
                     # Getting the time elapsed seconds from the creation of the order
                     current_time = dt.datetime.now()
@@ -295,11 +292,12 @@ class CryptoBot:
                     # If during the fulfillment operation the RSI value decreases while the
                     # last price of the symbol increases, the order is canceled: the previous 
                     # buying condition is no longer the best.
-                    if (symbol_data.iloc[-1]["rsi"] < rsi and symbol_data.iloc[-1]["close"] > buy_price) or elapsed_time >= self.timeout:
+                    if (symbol_data["historical_data"].iloc[-1]["RSI"] < rsi and symbol_data["historical_data"].iloc[-1]["close"] > buy_price) or elapsed_time >= self.timeout:
                         try:
                             # Canceling the order
                             self.client.cancel_order(symbol=symbol, orderId=buy_order["id"])
                         except Exception as e:
+                            # Logging error
                             utils.log(f'Error canceling order ({buy_order["id"]}): {str(e)}')
 
                 time.sleep(1)
@@ -316,9 +314,15 @@ class CryptoBot:
 
                         # Creating the selling order
                         sell_order_id = self.__sellOrder(symbol, sell_price, float(buy_order["quantity"]))
+
+                        # Logging operation
+                        utils.log(f'Selling order created - Id: {sell_order_id}')
+
                     except Exception as e:
-                        utils.log(f'Error creating SELL order: {str(e)}')
+                        # Logging error
+                        utils.log(f'Error creating sell order: {str(e)}', type="ERROR")
                         continue
+
                     finally:
                         time.sleep(1)
 
@@ -351,8 +355,12 @@ class CryptoBot:
                         self.data_collector.deleteOrder(buy_order_id)
                         self.data_collector.deleteOrder(sell_order_id)
 
+                        # Logging operation
+                        utils.log(f'Selling order filled - Id: {sell_order_id}')
+
                     except Exception as e:
-                        utils.log(f'Error sending SELLING report: {str(e)}')
+                        # Logging error
+                        utils.log(f'Error sending selling report: {str(e)}')
                         
                     else:
                         # Mark the position as close
@@ -365,11 +373,18 @@ class CryptoBot:
 
                     # Mark the selling order as not open
                     sell_order_id = None
+
+                    # Logging operation
+                    utils.log(f'Selling order {sell_order["status"].lower()} - Id: {sell_order_id}')
                 
                 # If the order has been manually canceled from the user, it breaks the cycle.
                 elif sell_order["status"] == "CANCELED":
                     # Deleting sell order from the memory
                     self.data_collector.deleteOrder(sell_order_id)
+
+                    # Logging operation
+                    utils.log(f'Selling order canceled - Id: {sell_order_id}')
+
                     break
 
                 time.sleep(1)
@@ -391,7 +406,7 @@ class CryptoBot:
             data_collector_status = self.data_collector.getStatus()
             time.sleep(1)
 
-        utils.log("BOT CONNECTED!")
+        utils.log("Bot connected")
 
         # Starting the CryptoBot's main thread
         crypto_bot_thread.start()
