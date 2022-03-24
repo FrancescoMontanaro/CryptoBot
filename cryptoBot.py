@@ -2,6 +2,7 @@ import math
 import time
 import utils
 import threading
+import indicators
 import datetime as dt
 import concurrent.futures
 from binance.client import Client
@@ -11,16 +12,14 @@ from dataCollector import DataCollector
 class CryptoBot:
     """ PRIVATE METHODS """
     # Class constructor
-    def __init__(self, api_key, api_secret, symbols, minumum_profit, against_symbol="USDT", interval="1m", rsi_window=13, rsi_threshold=20.0) -> None:
+    def __init__(self, api_key, api_secret, symbols, minumum_profit, against_symbol="USDT", interval="1m") -> None:
         # Initializing object's attributes
         self.symbols = symbols
         self.against_symbol = against_symbol
         self.minumum_profit = minumum_profit
         self.interval = interval
-        self.rsi_window = rsi_window
-        self.rsi_threshold = rsi_threshold
         self.open_position = False
-        self.timeout = 120
+        self.timeout = 60
 
         # Instantiating the Binance API Client
         self.client = Client(api_key=api_key, api_secret=api_secret)
@@ -130,63 +129,73 @@ class CryptoBot:
         return order_id
 
     
-    def __computeIndicators(self, symbol, rsi_window) -> tuple:
+    # Function to compute the required indicators of a given symbol
+    def __computeIndicators(self, dataframe) -> tuple:
+        # Computing the Simple Moving Average 200
+        dataframe["SMA_200"] = indicators.SMA(dataframe["close"], window=200)
+
+
+    # Function to collect the data of a symbol and to compute the required inidcators
+    def __symbolData(self, symbol) -> dict:
         # Getting the symbol's data from the DataCollector object
         dataframe = self.data_collector.getSymbolData(symbol)
 
-        dataframe["delta"] = delta = dataframe["close"].diff()
-        dataframe["up"] = up = delta.clip(lower=0)
-        dataframe["down"] = down = -1 * delta.clip(upper=0)
+        # Computing the required indicators
+        self.__computeIndicators(dataframe)
 
-        # Computing the exponential moving average
-        ema_up = up.ewm(com=rsi_window, adjust=False).mean()
-        ema_down = down.ewm(com=rsi_window, adjust=False).mean()
-
-        # Computing the relative strength index
-        relative_strength = ema_up / ema_down
-        dataframe["rsi"] = round((100.0 - (100.0 / (1.0 + relative_strength))), 3)
-
-        # Extracting the current RSI value and close price
-        current_rsi = dataframe["rsi"].tail(1).values[0]
-        current_price = dataframe["close"].tail(1).values[0]
-
-        return symbol, current_rsi, current_price
+        return {"symbol": symbol, "historical_data": dataframe}
 
 
-    # Function to check for some buying opportunity
-    def __buyingOpportunity(self) -> tuple:
-        # Computing the RSI indicator for every symbol in the list
+    # Function to collect the data of all the symbols in the list and compute the required inidcators
+    def __symbolsData(self) -> list:
         symbols_data = []
+
+        # Fetching the data and computing the indicators for every symbol in the list
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(self.symbols)) as executor:
-            futures = {executor.submit(self.__computeIndicators, symbol, self.rsi_window): symbol for symbol in self.symbols}
+            futures = {executor.submit(self.__symbolData, symbol): symbol for symbol in self.symbols}
             for future in concurrent.futures.as_completed(futures):
                 symbols_data.append(future.result())
 
-        # Filtering symbols whose RSI value is under the specified threshold
-        symbols_data = [symbol_data for symbol_data in symbols_data if symbol_data[1] <= self.rsi_threshold]
+        return symbols_data
 
-        buying_opportunity = None
-        if(len(symbols_data) > 0):
-            # Sorting symbols by their RSI value
-            symbols_data.sort(key=lambda symbol_data:symbol_data[1])
 
-            # Selecting the best buying opportunity as the one with the lowest RSI value
-            buying_opportunity = symbols_data[0]
+    # Function defining the buying strategy
+    def __buyingStrategy(self) -> dict:
+        # Getting the data of the symbols
+        symbols_data = self.__symbolsData()
 
-        return buying_opportunity
+        # Filtering symbols whose close price il lower than the SMA 200 
+        symbols_data = [symbol_data for symbol_data in symbols_data if symbol_data["historical_data"].iloc[-1].SMA_200 / symbol_data["historical_data"].iloc[-1].close >= 1.01]
+
+        if len(symbols_data) > 0:
+            # Sorting the symbols according to the highest SMA - price ratio
+            symbols_data.sort(key=lambda symbol_data: (symbol_data["historical_data"].iloc[-1].SMA_200 / symbol_data["historical_data"].iloc[-1].close), reverse=True)
+
+            # Selecting the symbol to invest in as the one with the highest SMA - price ratio
+            selected_symbol = symbols_data[0]
+
+            return selected_symbol
+
+        else:
+            return None
 
 
     # Bot's trading process
     def __trade(self) -> None:
         while True:
             ### LOOKING FOR BUYING OPPORTUNITIES ###
-            # Looking for a buying opportunity (RSI < threshold)
+            # Looking for a buying opportunity according to the selected strategy
             buy_opportunity = None
             while buy_opportunity is None:
-                buy_opportunity = self.__buyingOpportunity()
+                buy_opportunity = self.__buyingStrategy()
 
             # Buy opportunity found
-            symbol, rsi, buy_price = buy_opportunity
+            symbol = buy_opportunity["symbol"]
+            SMA_price_divergence = buy_opportunity["historical_data"].iloc[-1].SMA_200 / buy_opportunity["historical_data"].iloc[-1].close
+            buy_price = buy_opportunity["historical_data"].iloc[-1].close
+
+            # Logging operation
+            utils.log(f'Buying opportunity found - Symbol: {symbol} | Buying price: {buy_price} {self.against_symbol}')
 
             ### BUYING PROCESS ###
             # Creating a buying order.
@@ -201,8 +210,12 @@ class CryptoBot:
 
                 # Saving the timestamp in which the buying order has been placed
                 creation_time = dt.datetime.now()
+
+                # Logging operation
+                utils.log(f'Buying order created - Id: {buy_order_id}')
+
             except Exception as e:
-                utils.log(f'Error creating BUYING order: {str(e)}')
+                utils.log(f'Error creating buying order: {str(e)}')
                 continue
 
             # Checking for buying order fulfillment.
@@ -222,11 +235,17 @@ class CryptoBot:
                         # Sending a buying notification to the Discord channel
                         utils.sendWebhook(
                             symbol=symbol.replace(self.against_symbol, ""),
-                            description=f'Price: **{buy_price} {self.against_symbol}**\nQuantity invested: **{investment} {self.against_symbol}**\nQuantity bought: **{buy_order["quantity"]} {symbol.replace(self.against_symbol, "")}**\nRSI: **{rsi}**',
+                            description=f'Price: **{buy_price} {self.against_symbol}**\nQuantity invested: **{investment} {self.against_symbol}**\nQuantity bought: **{buy_order["quantity"]} {symbol.replace(self.against_symbol, "")}**',
                             color=6146183
                         )
+
+                        # Logging operation
+                        utils.log(f'Buying order filled - Id: {buy_order_id}')
+
                     except Exception as e:
-                        utils.log(f'Error sending BUYING report: {str(e)}')
+                        # Logging error
+                        utils.log(f'Error sending buying report: {str(e)}')
+
                     else:
                         # Mark the position as open
                         self.open_position = True
@@ -240,24 +259,37 @@ class CryptoBot:
                 elif buy_order["status"] == "CANCELED" or buy_order["status"] == "REJECTED" or buy_order["status"] == "EXPIRED":
                     # Deleting buy order from the memory
                     self.data_collector.deleteOrder(buy_order_id)
+
+                    # logging operation
+                    utils.log(f'Buying order {buy_order["status"].lower()} - Id: {buy_order_id}')
+                    
                     break
 
                 else:
-                    # Fetching the last RSI value and the price of the symbol
-                    _, current_rsi, current_price = self.__computeIndicators(symbol, self.rsi_window)
+                    # Fetching the last SMA 200 value and the price of the symbol
+                    symbol_data = self.__symbolData(symbol)
+
+                    # Extracting the current SMA 200 and price of the symbol
+                    current_SMA_200 = symbol_data["historical_data"].iloc[-1].SMA_200
+                    current_price = symbol_data["historical_data"].iloc[-1].close
+
+                    # Computing the current SMA 200 - price divergence
+                    current_SMA_price_divergence = current_SMA_200 / current_price
 
                     # Getting the time elapsed seconds from the creation of the order
                     current_time = dt.datetime.now()
                     elapsed_time = (current_time - creation_time).seconds
 
-                    # If during the fulfillment operation the RSI value decreases while the
+                    # If during the fulfillment operation the SMA_200-price divergence value increases and the
                     # last price of the symbol increases, the order is canceled: the previous 
                     # buying condition is no longer the best.
-                    if (current_rsi < rsi and current_price > buy_price) or elapsed_time >= self.timeout:
+                    if (current_SMA_price_divergence > SMA_price_divergence and current_price > buy_price) or elapsed_time >= self.timeout:
                         try:
                             # Canceling the order
                             self.client.cancel_order(symbol=symbol, orderId=buy_order["id"])
+
                         except Exception as e:
+                            # Logging error
                             utils.log(f'Error canceling order ({buy_order["id"]}): {str(e)}')
 
                 time.sleep(1)
@@ -274,9 +306,16 @@ class CryptoBot:
 
                         # Creating the selling order
                         sell_order_id = self.__sellOrder(symbol, sell_price, float(buy_order["quantity"]))
+
+                        # Logging operation
+                        utils.log(f'Selling order created - Id: {sell_order_id}')
+
                     except Exception as e:
-                        utils.log(f'Error creating SELL order: {str(e)}')
+                        # Logging error
+                        utils.log(f'Error creating sell order: {str(e)}')
+
                         continue
+
                     finally:
                         time.sleep(1)
 
@@ -309,8 +348,12 @@ class CryptoBot:
                         self.data_collector.deleteOrder(buy_order_id)
                         self.data_collector.deleteOrder(sell_order_id)
 
+                        # Logging operation
+                        utils.log(f'Selling order filled - Id: {sell_order_id}')
+
                     except Exception as e:
-                        utils.log(f'Error sending SELLING report: {str(e)}')
+                        # Logging error
+                        utils.log(f'Error sending selling report: {str(e)}')
                         
                     else:
                         # Mark the position as close
@@ -323,11 +366,18 @@ class CryptoBot:
 
                     # Mark the selling order as not open
                     sell_order_id = None
+
+                    # Logging operation
+                    utils.log(f'Selling order {sell_order["status"].lower()} - Id: {sell_order_id}')
                 
                 # If the order has been manually canceled from the user, it breaks the cycle.
                 elif sell_order["status"] == "CANCELED":
                     # Deleting sell order from the memory
                     self.data_collector.deleteOrder(sell_order_id)
+
+                    # Logging operation
+                    utils.log(f'Selling order canceled - Id: {sell_order_id}')
+
                     break
 
                 time.sleep(1)
@@ -340,6 +390,9 @@ class CryptoBot:
         data_collector_thread = threading.Thread(target=self.data_collector.start, args=[])
         crypto_bot_thread = threading.Thread(target=self.__trade, args=[])
 
+        # Initializing the logs file
+        utils.initLogFile()
+
         # Starting the DataCollector's main thread
         data_collector_thread.start()
 
@@ -348,6 +401,9 @@ class CryptoBot:
         while data_collector_status != "CONNECTED":
             data_collector_status = self.data_collector.getStatus()
             time.sleep(1)
+
+        # Logging the bot's connection status
+        utils.log(f'Bot {data_collector_status.lower()}')
 
         # Starting the CryptoBot's main thread
         crypto_bot_thread.start()

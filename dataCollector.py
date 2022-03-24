@@ -9,12 +9,13 @@ from binance import ThreadedWebsocketManager
 class DataCollector:
     """ PRIVATE METHODS """
     # Class constructor
-    def __init__(self, api_key, api_secret, symbols, against_symbol="USDT", interval="1m", lookback_days=2) -> None:
+    def __init__(self, api_key, api_secret, symbols, against_symbol="USDT", interval="1m", lookback_days=1, lookback_hours=6) -> None:
         # Initializing object's attributes
         self.symbols = symbols
         self.against_symbol = against_symbol
         self.interval = interval
         self.lookback_days = lookback_days
+        self.lookback_hours = lookback_hours
         self.status = "DISCONNECTED"
 
         # Creating dataframes to containing historical data of the symbols
@@ -37,7 +38,7 @@ class DataCollector:
     def __historicalData(self, symbol) -> None:
         # Defining the start period
         start = dt.datetime.now().timestamp()
-        start = int(start * 1000) - (self.lookback_days * 1 * 60 * 60 * 1000)
+        start = int(start * 1000) - (self.lookback_days * self.lookback_hours * 60 * 60 * 1000)
 
         # Collecting historical data of the symbol
         historical_data = self.client.get_historical_klines(symbol.upper(), self.interval, start)
@@ -45,8 +46,8 @@ class DataCollector:
         # Loading the data into a pandas dataframe
         dataframe = pd.DataFrame([[data[i] for i in range(6)] for data in historical_data])
         dataframe.columns = ['time','open', 'high', 'low', 'close', 'volume']
+        dataframe = dataframe.astype({"open": 'float64', "high": 'float64', "low": 'float64', "close": 'float64', "volume": 'float64'})
         dataframe.set_index("time", drop=True, inplace=True)
-        dataframe = dataframe.astype({"close": float})
         dataframe.index.astype('int64')
 
         self.symbols_dataframes[symbol.upper()] = dataframe
@@ -70,7 +71,7 @@ class DataCollector:
         # Error handling
         if msg["e"] == "error" and msg["m"] == "Max reconnect retries reached":
             self.status = "DISCONNECTED"
-            utils.log("Websocket Disconnected.")
+            utils.log("Fatal Error - Websocket Disconnected")
             raise Exception("Websocket Disconnected")
 
         # If the candle's open time is not present in the symbol's dataframe, it is added and the oldest candle is removed
@@ -78,8 +79,8 @@ class DataCollector:
             # Loading the candle's data into a pandas dataframe
             df = pd.DataFrame([[msg["k"]["t"], msg["k"]["o"], msg["k"]["h"], msg["k"]["l"], msg["k"]["c"], msg["k"]["v"]]])
             df.columns = ['time','open', 'high', 'low', 'close', 'volume']
+            df = df.astype({"open": 'float64', "high": 'float64', "low": 'float64', "close": 'float64', "volume": 'float64'})
             df.set_index("time", drop=True, inplace=True)
-            df = df.astype({"open": float, "high": float, "low": float, "close": float, "volume": float})
             df.index.astype('int64')
 
             # Appending the candle's dataframe to the symbol's main dataframe
@@ -134,7 +135,7 @@ class DataCollector:
         # Error handling
         if msg["e"] == "error" and msg["m"] == "Max reconnect retries reached":
             self.status = "DISCONNECTED"
-            utils.log("Websocket Disconnected")
+            utils.log("Fatal Error - Websocket Disconnected")
             raise Exception("Websocket Disconnected")
 
         # Updating user's assets balance
