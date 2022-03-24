@@ -131,14 +131,8 @@ class CryptoBot:
     
     # Function to compute the required indicators of a given symbol
     def __computeIndicators(self, dataframe) -> tuple:
-        # Computing the RSI indicator
-        dataframe["RSI"] = indicators.RSI(dataframe["close"], window=14)
-
-        # Computing Exponential moving averages
-        dataframe["EMA_50"] = indicators.EMA(dataframe["close"], window=50)
-        dataframe["EMA_200"] = indicators.EMA(dataframe["close"], window=200)
-
-        return dataframe
+        # Computing the Simple Moving Average 200
+        dataframe["SMA_200"] = indicators.SMA(dataframe["close"], window=200)
 
 
     # Function to collect the data of a symbol and to compute the required inidcators
@@ -147,7 +141,7 @@ class CryptoBot:
         dataframe = self.data_collector.getSymbolData(symbol)
 
         # Computing the required indicators
-        dataframe = self.__computeIndicators(dataframe)
+        self.__computeIndicators(dataframe)
 
         return {"symbol": symbol, "historical_data": dataframe}
 
@@ -170,21 +164,15 @@ class CryptoBot:
         # Getting the data of the symbols
         symbols_data = self.__symbolsData()
 
-        increasing_symbols = []
-        for symbol_data in symbols_data:
-            # Extracting the latest 3 RSI values
-            latest_rsi_values = symbol_data["historical_data"]["RSI"].tail(3) 
+        # Filtering symbols whose close price il lower than the SMA 200 
+        symbols_data = [symbol_data for symbol_data in symbols_data if symbol_data["historical_data"].iloc[-1].SMA_200 / symbol_data["historical_data"].iloc[-1].close >= 1.01]
 
-            # Checking if the latest rsi values are monotonically increasing in the selected range of values
-            if latest_rsi_values.is_monotonic_increasing and all(latest_rsi_values.values[:2] < 50) and latest_rsi_values.values[2] >= 50:
-                increasing_symbols.append(symbol_data)
+        if len(symbols_data) > 0:
+            # Sorting the symbols according to the highest SMA - price ratio
+            symbols_data.sort(key=lambda symbol_data: (symbol_data["historical_data"].iloc[-1].SMA_200 / symbol_data["historical_data"].iloc[-1].close), reverse=True)
 
-        if len(increasing_symbols) > 0:
-            # Sorting symbols by their RSI variation
-            increasing_symbols.sort(key=lambda increasing_symbol: (increasing_symbol["historical_data"].iloc[-3]["RSI"] / increasing_symbol["historical_data"].iloc[-1]["RSI"]))
-
-            # Selecting the symbol to invest in as the one with the lowest RSI variation
-            selected_symbol = increasing_symbols[0]
+            # Selecting the symbol to invest in as the one with the highest SMA - price ratio
+            selected_symbol = symbols_data[0]
 
             return selected_symbol
 
@@ -196,15 +184,15 @@ class CryptoBot:
     def __trade(self) -> None:
         while True:
             ### LOOKING FOR BUYING OPPORTUNITIES ###
-            # Looking for a buying opportunity (RSI < threshold)
+            # Looking for a buying opportunity according to the selected strategy
             buy_opportunity = None
             while buy_opportunity is None:
                 buy_opportunity = self.__buyingStrategy()
 
             # Buy opportunity found
             symbol = buy_opportunity["symbol"]
-            rsi = buy_opportunity["historical_data"].iloc[-1]["RSI"]
-            buy_price = buy_opportunity["historical_data"].iloc[-1]["close"]
+            SMA_price_divergence = buy_opportunity["historical_data"].iloc[-1].SMA_200 / buy_opportunity["historical_data"].iloc[-1].close
+            buy_price = buy_opportunity["historical_data"].iloc[-1].close
 
             # Logging operation
             utils.log(f'Buying opportunity found - Symbol: {symbol} | Buying price: {buy_price} {self.against_symbol}')
@@ -247,7 +235,7 @@ class CryptoBot:
                         # Sending a buying notification to the Discord channel
                         utils.sendWebhook(
                             symbol=symbol.replace(self.against_symbol, ""),
-                            description=f'Price: **{buy_price} {self.against_symbol}**\nQuantity invested: **{investment} {self.against_symbol}**\nQuantity bought: **{buy_order["quantity"]} {symbol.replace(self.against_symbol, "")}**\nRSI: **{rsi}**',
+                            description=f'Price: **{buy_price} {self.against_symbol}**\nQuantity invested: **{investment} {self.against_symbol}**\nQuantity bought: **{buy_order["quantity"]} {symbol.replace(self.against_symbol, "")}**',
                             color=6146183
                         )
 
@@ -278,21 +266,24 @@ class CryptoBot:
                     break
 
                 else:
-                    # Fetching the last RSI value and the price of the symbol
+                    # Fetching the last SMA 200 value and the price of the symbol
                     symbol_data = self.__symbolData(symbol)
 
-                    # Extracting the current RSI and price of the symbol
-                    current_rsi = symbol_data["historical_data"].iloc[-1]["RSI"]
-                    current_price = symbol_data["historical_data"].iloc[-1]["close"]
+                    # Extracting the current SMA 200 and price of the symbol
+                    current_SMA_200 = symbol_data["historical_data"].iloc[-1].SMA_200
+                    current_price = symbol_data["historical_data"].iloc[-1].close
+
+                    # Computing the current SMA 200 - price divergence
+                    current_SMA_price_divergence = current_SMA_200 / current_price
 
                     # Getting the time elapsed seconds from the creation of the order
                     current_time = dt.datetime.now()
                     elapsed_time = (current_time - creation_time).seconds
 
-                    # If during the fulfillment operation the RSI value decreases while the
+                    # If during the fulfillment operation the SMA_200-price divergence value increases and the
                     # last price of the symbol increases, the order is canceled: the previous 
                     # buying condition is no longer the best.
-                    if (current_rsi < rsi and  current_price > buy_price) or elapsed_time >= self.timeout:
+                    if (current_SMA_price_divergence > SMA_price_divergence and current_price > buy_price) or elapsed_time >= self.timeout:
                         try:
                             # Canceling the order
                             self.client.cancel_order(symbol=symbol, orderId=buy_order["id"])

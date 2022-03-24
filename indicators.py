@@ -1,6 +1,14 @@
 import pandas as pd
 
 
+# Function to compute the Simple Moving Average indicator for a given symbol
+def SMA(close_prices, window=50) -> pd.Series:
+    # Computing the simple moving average with the selceted window
+    sma = close_prices.rolling(window).mean()
+
+    return sma
+
+
 # Function to compute the Exponential Moving Average indicator for a given symbol
 def EMA(close_prices, window=50) -> pd.Series:
     # Computing the exponential moving average with the selceted window
@@ -38,7 +46,7 @@ def MACD(close_prices, windows=[12, 26, 9]) -> tuple:
     # Computing the signal line
     macd_signal = macd.ewm(span=windows[2], adjust=False).mean()
 
-    # COmputing the divregence between the MACD anc the signal line
+    # Computing the divregence between the MACD anc the signal line
     divergence = macd - macd_signal
 
     return macd, macd_signal, divergence
