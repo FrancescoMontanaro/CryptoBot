@@ -1,7 +1,7 @@
 import pandas as pd
 
 
-# Function to compute the Simple Moving Average indicator for a given symbol
+# Function to compute the Simple Moving Average indicator on close prices
 def SMA(close_prices, window=50) -> pd.Series:
     # Computing the simple moving average with the selceted window
     sma = close_prices.rolling(window).mean()
@@ -9,7 +9,7 @@ def SMA(close_prices, window=50) -> pd.Series:
     return sma
 
 
-# Function to compute the Exponential Moving Average indicator for a given symbol
+# Function to compute the Exponential Moving Average indicator on close prices
 def EMA(close_prices, window=50) -> pd.Series:
     # Computing the exponential moving average with the selceted window
     ema = close_prices.ewm(span=window, adjust=False).mean()
@@ -17,7 +17,7 @@ def EMA(close_prices, window=50) -> pd.Series:
     return ema
 
 
-# Function to compute the RSI indicator for a given symbol
+# Function to compute the RSI indicator on close prices
 def RSI(close_prices, window=14) -> pd.Series:
     delta = close_prices.diff()
     up = delta.clip(lower=0)
@@ -34,7 +34,7 @@ def RSI(close_prices, window=14) -> pd.Series:
     return rsi
 
 
-# Function to compute the MACD indicator for a given symbol
+# Function to compute the MACD indicator on close prices
 def MACD(close_prices, windows=[12, 26, 9]) -> tuple:
     # Computing the exponential moving averages
     ema_12 = close_prices.ewm(span=windows[0], adjust=False).mean()
@@ -50,3 +50,16 @@ def MACD(close_prices, windows=[12, 26, 9]) -> tuple:
     divergence = macd - macd_signal
 
     return macd, macd_signal, divergence
+
+
+# Function to compute the Bollinger Bands on close prices
+def BOLL(close_prices, window=20, mult=2) -> tuple:
+    # Computing the Simple Moving Average and the Standard Deviation of the close prices
+    sma = close_prices.rolling(window).mean()
+    std = close_prices.rolling(window).std()
+
+    # Computing the top and bottom band
+    bollinger_up = sma + std * mult
+    bollinger_down = sma - std * mult
+
+    return bollinger_up, bollinger_down

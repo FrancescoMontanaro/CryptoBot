@@ -72,6 +72,9 @@ def applyIndicators(df) -> None:
     # Computing the RSI 14 on the close price values
     df["RSI"] = indicators.RSI(df["close"], window=14)
 
+    # Computing the Bollinger Bands indicator
+    df["BOOL_UP"], df["BOOL_DOWN"] = indicators.BOLL(df["close"])
+
 
 # Function to load the historical data of the given symbols from the local files
 def loadData() -> list:
