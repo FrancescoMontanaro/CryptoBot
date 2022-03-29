@@ -12,10 +12,10 @@ class DataCollector:
     def __init__(self, api_key, api_secret, symbols, against_symbol="USDT", interval="1m", lookback_days=1, lookback_hours=6) -> None:
         # Initializing object's attributes
         self.symbols = symbols
-        self.against_symbol = against_symbol
         self.interval = interval
         self.lookback_days = lookback_days
         self.lookback_hours = lookback_hours
+        self.against_symbol = against_symbol
         self.status = "DISCONNECTED"
 
         # Creating dataframes to containing historical data of the symbols
@@ -231,3 +231,8 @@ class DataCollector:
     # Function to delete an order by its id
     def deleteOrder(self, order_id) -> None:
         self.orders = [order for order in self.orders if order["id"] != order_id]
+
+
+    # Function to remove all the orders from the memory
+    def cleanOrders(self) -> None:
+        self.orders = []
