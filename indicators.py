@@ -59,7 +59,7 @@ def BOLL(close_prices, window=20, mult=2) -> tuple:
     std = close_prices.rolling(window).std()
 
     # Computing the top and bottom band
-    bollinger_up = sma + std * mult
-    bollinger_down = sma - std * mult
+    bollinger_up = sma + mult * std
+    bollinger_down = sma - mult * std
 
     return bollinger_up, bollinger_down

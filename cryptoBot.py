@@ -18,6 +18,8 @@ class CryptoBot:
         self.against_symbol = against_symbol
         self.minumum_profit = minumum_profit
         self.interval = interval
+        self.buy_fees = 0.00075
+        self.sell_fees = 0.00075
         self.open_position = False
         self.timeout = 60
 
@@ -235,7 +237,7 @@ class CryptoBot:
                         # Sending a buying notification to the Discord channel
                         utils.sendWebhook(
                             symbol=symbol.replace(self.against_symbol, ""),
-                            description=f'Price: **{buy_price} {self.against_symbol}**\nQuantity invested: **{investment} {self.against_symbol}**\nQuantity bought: **{buy_order["quantity"]} {symbol.replace(self.against_symbol, "")}**',
+                            description=f'Price: **{buy_price} {self.against_symbol}**\nQuantity invested: **{round(investment, 3)} {self.against_symbol}**\nQuantity bought: **{buy_order["quantity"]} {symbol.replace(self.against_symbol, "")}**',
                             color=6146183
                         )
 
@@ -334,19 +336,23 @@ class CryptoBot:
                         account_balance = self.data_collector.getAssetBalance(self.against_symbol)
                         account_balance = float(account_balance["free"])
 
-                        # Computing the profit obtained from the transaction
-                        profit = round(((account_balance * (sell_price / buy_price)) - account_balance), 3)
+                        # Computing the Gross profit obtained from the transaction
+                        gross_profit = investment * (sell_price / buy_price)
+                        gross_profit -= investment
+                        gross_profit = round(gross_profit, 3)
+
+                        # Computing the Net profit obtained from the transaction
+                        net_profit = (1 - self.buy_fees) * investment / buy_price
+                        net_profit *= (1 - self.sell_fees) * sell_price
+                        net_profit -= investment
+                        net_profit = round(net_profit, 3)
 
                         # Sending a selling notification to the Discord channel
                         utils.sendWebhook(
                             symbol=symbol.replace(self.against_symbol, ""),
-                            description=f'Price: **{sell_price} {self.against_symbol}**\nTransaction profit: **{profit} {self.against_symbol}**\nBalance: **{round(account_balance, 3)} {self.against_symbol}**',
+                            description=f'Price: **{round(sell_price, 2)} {self.against_symbol}**\nGross profit: **{gross_profit} {self.against_symbol}**\nNet profit: **{net_profit} {self.against_symbol}**\nBalance: **{round(account_balance, 3)} {self.against_symbol}**',
                             color=14898529
                         )
-
-                        # Deleting orders from the memory
-                        self.data_collector.deleteOrder(buy_order_id)
-                        self.data_collector.deleteOrder(sell_order_id)
 
                         # Logging operation
                         utils.log(f'Selling order filled - Id: {sell_order_id}')
@@ -356,6 +362,9 @@ class CryptoBot:
                         utils.log(f'Error sending selling report: {str(e)}')
                         
                     else:
+                        # Deleting all the orders from the memory
+                        self.data_collector.cleanOrders()
+                        
                         # Mark the position as close
                         self.open_position = False
 
