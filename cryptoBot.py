@@ -237,8 +237,8 @@ class CryptoBot:
                         # Sending a buying notification to the Discord channel
                         utils.sendWebhook(
                             symbol=symbol.replace(self.against_symbol, ""),
-                            description=f'Price: **{buy_price} {self.against_symbol}**\nQuantity invested: **{round(investment, 3)} {self.against_symbol}**\nQuantity bought: **{buy_order["quantity"]} {symbol.replace(self.against_symbol, "")}**',
-                            color=6146183
+                            description=f'Price: **{buy_order["price"]} {self.against_symbol}**\nQuantity invested: **{round(investment, 3)} {self.against_symbol}**\nQuantity bought: **{buy_order["quantity"]} {symbol.replace(self.against_symbol, "")}**',
+                            side="BUY"
                         )
 
                         # Logging operation
@@ -285,7 +285,7 @@ class CryptoBot:
                     # If during the fulfillment operation the SMA_200-price divergence value increases and the
                     # last price of the symbol increases, the order is canceled: the previous 
                     # buying condition is no longer the best.
-                    if (current_SMA_price_divergence > SMA_price_divergence and current_price > buy_price) or elapsed_time >= self.timeout:
+                    if (current_SMA_price_divergence > SMA_price_divergence and current_price > buy_order["price"]) or elapsed_time >= self.timeout:
                         try:
                             # Canceling the order
                             self.client.cancel_order(symbol=symbol, orderId=buy_order["id"])
@@ -304,7 +304,7 @@ class CryptoBot:
                 while sell_order_id is None:
                     try:
                         # Computing the sell price according to the desired profit
-                        sell_price = buy_price * self.minumum_profit
+                        sell_price = buy_order["price"] * self.minumum_profit
 
                         # Creating the selling order
                         sell_order_id = self.__sellOrder(symbol, sell_price, float(buy_order["quantity"]))
@@ -337,21 +337,21 @@ class CryptoBot:
                         account_balance = float(account_balance["free"])
 
                         # Computing the Gross profit obtained from the transaction
-                        gross_profit = investment * (sell_price / buy_price)
+                        gross_profit = investment * (sell_order["price"] / buy_order["price"])
                         gross_profit -= investment
                         gross_profit = round(gross_profit, 3)
 
                         # Computing the Net profit obtained from the transaction
-                        net_profit = (1 - self.buy_fees) * investment / buy_price
-                        net_profit *= (1 - self.sell_fees) * sell_price
+                        net_profit = (1 - self.buy_fees) * investment / buy_order["price"]
+                        net_profit *= (1 - self.sell_fees) * sell_order["price"]
                         net_profit -= investment
                         net_profit = round(net_profit, 3)
 
                         # Sending a selling notification to the Discord channel
                         utils.sendWebhook(
                             symbol=symbol.replace(self.against_symbol, ""),
-                            description=f'Price: **{round(sell_price, 2)} {self.against_symbol}**\nGross profit: **{gross_profit} {self.against_symbol}**\nNet profit: **{net_profit} {self.against_symbol}**\nBalance: **{round(account_balance, 3)} {self.against_symbol}**',
-                            color=14898529
+                            description=f'Price: **{round(sell_order["price"], 2)} {self.against_symbol}**\nGross profit: **{gross_profit} {self.against_symbol}**\nNet profit: **{net_profit} {self.against_symbol}**\nBalance: **{round(account_balance, 3)} {self.against_symbol}**',
+                            side="SELL"
                         )
 
                         # Logging operation

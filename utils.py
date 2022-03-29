@@ -40,11 +40,11 @@ def log(data) -> None:
 
 
 # Function to send Discord notifications
-def sendWebhook(symbol, description, color) -> None:
+def sendWebhook(symbol, description, side) -> None:
     embed = {
         "username": "Crypto Bot",
-        "title": f'**{symbol}**',
-        "color": color,
+        "title": f'**POSITION {"OPENED" if side == "BUY" else "CLOSED"} | {symbol}**',
+        "color": 6146183 if side == "BUY" else 14898529,
         "description": description,
         "footer": { "text": "Crypto Bot"},
         "timestamp": str(getDatetime())
