@@ -175,11 +175,6 @@ class DataCollector:
 
 
     """ PUBLIC METHODS """
-    # Function to get the DataCollector status
-    def getStatus(self) -> str:
-        return self.status
-
-
     # Function to start the data collection
     def start(self) -> None:
         # Initializing symbols' hystorical data
@@ -201,6 +196,11 @@ class DataCollector:
 
         # Joining the threads with the main thread
         self.twm.join()
+
+
+    # Function to get the DataCollector status
+    def getStatus(self) -> str:
+        return self.status
 
 
     # Function to get the dataframe of a specific symbol

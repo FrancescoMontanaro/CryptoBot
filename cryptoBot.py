@@ -350,7 +350,7 @@ class CryptoBot:
                         # Sending a selling notification to the Discord channel
                         utils.sendWebhook(
                             symbol=symbol.replace(self.against_symbol, ""),
-                            description=f'Price: **{round(sell_order["price"], 2)} {self.against_symbol}**\nGross profit: **{gross_profit} {self.against_symbol}**\nNet profit: **{net_profit} {self.against_symbol}**\nBalance: **{round(account_balance, 3)} {self.against_symbol}**',
+                            description=f'Price: **{sell_order["price"]} {self.against_symbol}**\nGross profit: **{gross_profit} {self.against_symbol}**\nNet profit: **{net_profit} {self.against_symbol}**\nBalance: **{round(account_balance, 3)} {self.against_symbol}**',
                             side="SELL"
                         )
 
