@@ -123,7 +123,7 @@ class DataCollector:
                 "side": open_order["side"],
                 "type": open_order["type"],
                 "quantity": float(open_order["origQty"]),
-                "price": open_order["price"],
+                "price": float(open_order["price"]),
                 "status": open_order["status"],
                 "timestamp": open_order["time"],
                 "filled_quantity": float(open_order["executedQty"])
@@ -167,7 +167,7 @@ class DataCollector:
                     "side": msg["S"],
                     "type": msg["o"],
                     "quantity": float(msg["q"]),
-                    "price": msg["p"],
+                    "price": float(msg["p"]),
                     "status": msg["X"],
                     "timestamp": msg["T"],
                     "filled_quantity": float(msg["z"])
@@ -175,11 +175,6 @@ class DataCollector:
 
 
     """ PUBLIC METHODS """
-    # Function to get the DataCollector status
-    def getStatus(self) -> str:
-        return self.status
-
-
     # Function to start the data collection
     def start(self) -> None:
         # Initializing symbols' hystorical data
@@ -201,6 +196,11 @@ class DataCollector:
 
         # Joining the threads with the main thread
         self.twm.join()
+
+
+    # Function to get the DataCollector status
+    def getStatus(self) -> str:
+        return self.status
 
 
     # Function to get the dataframe of a specific symbol
